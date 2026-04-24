@@ -1,0 +1,100 @@
+import { AsyncLocalStorage } from 'async_hooks';
+import { randomUUID } from 'crypto';
+import type { SpanKind, SpanPayload, TraceSpanOptions } from './types.js';
+
+interface SpanContext {
+  spanId: string;
+}
+
+const storage = new AsyncLocalStorage<SpanContext>();
+
+export class Span {
+  readonly id = randomUUID();
+  private status: 'ok' | 'error' = 'ok';
+  private readonly attrs: Record<string, unknown> = {};
+  private readonly startTime = Date.now();
+
+  constructor(
+    readonly name: string,
+    readonly kind: SpanKind,
+    readonly traceId: string,
+    readonly parentSpanId: string | null,
+    private readonly onEnd: (payload: SpanPayload) => void,
+  ) {}
+
+  setAttribute(key: string, value: unknown): void {
+    this.attrs[key] = value;
+  }
+
+  recordError(error: Error): void {
+    this.status = 'error';
+    this.attrs['error.message'] = error.message;
+    this.attrs['error.stack'] = error.stack ?? '';
+  }
+
+  end(attributes?: Record<string, unknown>): void {
+    if (attributes) Object.assign(this.attrs, attributes);
+    const endTime = Date.now();
+    this.onEnd({
+      id: this.id,
+      traceId: this.traceId,
+      parentSpanId: this.parentSpanId,
+      name: this.name,
+      kind: this.kind,
+      startTime: this.startTime,
+      endTime,
+      durationMs: endTime - this.startTime,
+      status: this.status,
+      attributes: { ...this.attrs },
+    });
+  }
+}
+
+const NOOP_SPAN = {
+  setAttribute: (_key: string, _value: unknown) => {},
+  recordError: (_error: Error) => {},
+  end: (_attributes?: Record<string, unknown>) => {},
+} as unknown as Span;
+
+export class Trace {
+  readonly id: string;
+
+  constructor(
+    private readonly onSpan: ((payload: SpanPayload) => void) | null,
+    readonly tenantId?: string,
+  ) {
+    this.id = onSpan ? randomUUID() : '';
+  }
+
+  startSpan(name: string, kind: SpanKind = 'custom'): Span {
+    if (!this.onSpan) return NOOP_SPAN;
+    const context = storage.getStore();
+    const parentSpanId = context?.spanId ?? null;
+    return new Span(name, kind, this.id, parentSpanId, this.onSpan);
+  }
+
+  async trace<T>(
+    name: string,
+    fn: () => Promise<T>,
+    options: TraceSpanOptions = {},
+  ): Promise<T> {
+    if (!this.onSpan) return fn();
+
+    const span = this.startSpan(name, options.kind ?? 'custom');
+    if (options.attributes) {
+      for (const [k, v] of Object.entries(options.attributes)) {
+        span.setAttribute(k, v);
+      }
+    }
+
+    try {
+      const result = await storage.run({ spanId: span.id }, fn);
+      span.end();
+      return result;
+    } catch (error) {
+      if (error instanceof Error) span.recordError(error);
+      span.end();
+      throw error;
+    }
+  }
+}

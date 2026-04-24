@@ -1,0 +1,100 @@
+import { describe, it, expect, vi } from 'vitest';
+import { Span, Trace } from '../src/tracer.js';
+import type { SpanPayload } from '../src/types.js';
+
+describe('Span', () => {
+  it('records name, kind, attributes and status ok on end', () => {
+    const captured: SpanPayload[] = [];
+    const span = new Span('test-span', 'llm_call', 'trace-1', null, (p) =>
+      captured.push(p),
+    );
+
+    span.setAttribute('llm.model', 'claude-sonnet-4-6');
+    span.end({ 'llm.prompt_tokens': 150 });
+
+    expect(captured).toHaveLength(1);
+    expect(captured[0].name).toBe('test-span');
+    expect(captured[0].kind).toBe('llm_call');
+    expect(captured[0].status).toBe('ok');
+    expect(captured[0].attributes).toMatchObject({
+      'llm.model': 'claude-sonnet-4-6',
+      'llm.prompt_tokens': 150,
+    });
+    expect(captured[0].durationMs).toBeGreaterThanOrEqual(0);
+    expect(captured[0].parentSpanId).toBeNull();
+  });
+
+  it('records error status and message on recordError', () => {
+    const captured: SpanPayload[] = [];
+    const span = new Span('step', 'custom', 'trace-1', null, (p) =>
+      captured.push(p),
+    );
+
+    span.recordError(new Error('something broke'));
+    span.end();
+
+    expect(captured[0].status).toBe('error');
+    expect(captured[0].attributes['error.message']).toBe('something broke');
+    expect(typeof captured[0].attributes['error.stack']).toBe('string');
+  });
+});
+
+describe('Trace', () => {
+  it('startSpan creates span with traceId and no parent at top level', () => {
+    const captured: SpanPayload[] = [];
+    const trace = new Trace((p) => captured.push(p));
+
+    const span = trace.startSpan('root-span', 'agent_step');
+    span.end();
+
+    expect(captured[0].traceId).toBe(trace.id);
+    expect(captured[0].parentSpanId).toBeNull();
+  });
+
+  it('trace() propagates parentSpanId via AsyncLocalStorage', async () => {
+    const captured: SpanPayload[] = [];
+    const trace = new Trace((p) => captured.push(p));
+
+    await trace.trace('parent-step', async () => {
+      const child = trace.startSpan('child-span', 'tool_call');
+      child.end();
+    });
+
+    const parent = captured.find((s) => s.name === 'parent-step')!;
+    const child = captured.find((s) => s.name === 'child-span')!;
+
+    expect(parent).toBeDefined();
+    expect(child.parentSpanId).toBe(parent.id);
+  });
+
+  it('trace() captures thrown error, marks span as error, and re-throws', async () => {
+    const captured: SpanPayload[] = [];
+    const trace = new Trace((p) => captured.push(p));
+
+    await expect(
+      trace.trace('failing-step', async () => {
+        throw new Error('boom');
+      }),
+    ).rejects.toThrow('boom');
+
+    expect(captured[0].status).toBe('error');
+    expect(captured[0].attributes['error.message']).toBe('boom');
+  });
+
+  it('noop trace (null onSpan) calls fn but records no spans', async () => {
+    const trace = new Trace(null);
+    const fn = vi.fn().mockResolvedValue('result');
+
+    const result = await trace.trace('step', fn);
+
+    expect(result).toBe('result');
+    expect(fn).toHaveBeenCalledOnce();
+  });
+
+  it('noop trace startSpan returns a span that does not throw on end', () => {
+    const trace = new Trace(null);
+    const span = trace.startSpan('step', 'custom');
+
+    expect(() => span.end()).not.toThrow();
+  });
+});
