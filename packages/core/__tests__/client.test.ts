@@ -1,0 +1,97 @@
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { AgentLensClient } from '../src/client.js';
+
+describe('AgentLensClient', () => {
+  beforeEach(() => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true }));
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  });
+
+  it('sends spans to /v1/traces on flush', async () => {
+    const client = new AgentLensClient({
+      apiKey: 'test-key',
+      projectId: 'my-project',
+      endpoint: 'http://localhost:8080',
+    });
+
+    const trace = client.startTrace({ name: 'run', tenantId: 'acme' });
+    const span = trace.startSpan('step', 'custom');
+    span.end();
+
+    const flushPromise = client.flush();
+    await vi.runAllTimersAsync();
+    await flushPromise;
+
+    expect(fetch).toHaveBeenCalledOnce();
+    const [url, init] = (fetch as ReturnType<typeof vi.fn>).mock.calls[0] as [
+      string,
+      RequestInit & { headers: Record<string, string> },
+    ];
+    expect(url).toBe('http://localhost:8080/v1/traces');
+    expect(init.headers['Authorization']).toBe('Bearer test-key');
+
+    const body = JSON.parse(init.body as string) as {
+      projectId: string;
+      spans: unknown[];
+    };
+    expect(body.projectId).toBe('my-project');
+    expect(body.spans).toHaveLength(1);
+  });
+
+  it('does not send spans when disabled: true', async () => {
+    const client = new AgentLensClient({
+      apiKey: 'test-key',
+      projectId: 'my-project',
+      disabled: true,
+    });
+
+    const trace = client.startTrace({ name: 'run' });
+    trace.startSpan('step', 'custom').end();
+
+    const flushPromise = client.flush();
+    await vi.runAllTimersAsync();
+    await flushPromise;
+
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('silently drops spans after 3 failed fetch attempts', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('network error')));
+
+    const client = new AgentLensClient({
+      apiKey: 'key',
+      projectId: 'proj',
+      endpoint: 'http://localhost:8080',
+    });
+
+    const trace = client.startTrace({ name: 'run' });
+    trace.startSpan('step', 'custom').end();
+
+    const flushPromise = client.flush();
+    await vi.advanceTimersByTimeAsync(15_000);
+    await expect(flushPromise).resolves.toBeUndefined();
+
+    expect(fetch).toHaveBeenCalledTimes(3);
+  });
+
+  it('uses default endpoint when none is provided', async () => {
+    const client = new AgentLensClient({
+      apiKey: 'key',
+      projectId: 'proj',
+    });
+
+    client.startTrace({ name: 'run' }).startSpan('s', 'custom').end();
+
+    const flushPromise = client.flush();
+    await vi.runAllTimersAsync();
+    await flushPromise;
+
+    const [url] = (fetch as ReturnType<typeof vi.fn>).mock.calls[0] as [string];
+    expect(url).toBe('https://ingest.agentlens.io/v1/traces');
+  });
+});
