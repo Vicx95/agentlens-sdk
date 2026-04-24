@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { AgentLensClient } from '../src/client.js';
+import { TracelyxClient } from '../src/client.js';
 
-describe('AgentLensClient', () => {
+describe('TracelyxClient', () => {
   beforeEach(() => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true }));
     vi.useFakeTimers();
@@ -13,7 +13,7 @@ describe('AgentLensClient', () => {
   });
 
   it('sends spans to /v1/traces on flush', async () => {
-    const client = new AgentLensClient({
+    const client = new TracelyxClient({
       apiKey: 'test-key',
       projectId: 'my-project',
       endpoint: 'http://localhost:8080',
@@ -44,7 +44,7 @@ describe('AgentLensClient', () => {
   });
 
   it('does not send spans when disabled: true', async () => {
-    const client = new AgentLensClient({
+    const client = new TracelyxClient({
       apiKey: 'test-key',
       projectId: 'my-project',
       disabled: true,
@@ -63,7 +63,7 @@ describe('AgentLensClient', () => {
   it('silently drops spans after 3 failed fetch attempts', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('network error')));
 
-    const client = new AgentLensClient({
+    const client = new TracelyxClient({
       apiKey: 'key',
       projectId: 'proj',
       endpoint: 'http://localhost:8080',
@@ -80,7 +80,7 @@ describe('AgentLensClient', () => {
   });
 
   it('uses default endpoint when none is provided', async () => {
-    const client = new AgentLensClient({
+    const client = new TracelyxClient({
       apiKey: 'key',
       projectId: 'proj',
     });
@@ -92,6 +92,6 @@ describe('AgentLensClient', () => {
     await flushPromise;
 
     const [url] = (fetch as ReturnType<typeof vi.fn>).mock.calls[0] as [string];
-    expect(url).toBe('https://ingest.agentlens.io/v1/traces');
+    expect(url).toBe('https://ingest.tracelyx.dev/v1/traces');
   });
 });

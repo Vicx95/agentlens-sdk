@@ -1,5 +1,5 @@
 import type {
-  AgentLensClientOptions,
+  TracelyxClientOptions,
   SpanPayload,
   StartTraceOptions,
   TracePayload,
@@ -7,7 +7,7 @@ import type {
 import { SpanBuffer } from './buffer.js';
 import { Trace } from './tracer.js';
 
-const DEFAULT_ENDPOINT = 'https://ingest.agentlens.io';
+const DEFAULT_ENDPOINT = 'https://ingest.tracelyx.dev';
 const MAX_RETRIES = 3;
 const FLUSH_TIMEOUT_MS = 10_000;
 
@@ -15,7 +15,7 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-export class AgentLensClient {
+export class TracelyxClient {
   private readonly apiKey: string;
   private readonly projectId: string;
   private readonly endpoint: string;
@@ -23,7 +23,7 @@ export class AgentLensClient {
   private readonly disabled: boolean;
   private readonly buffer: SpanBuffer | null;
 
-  constructor(options: AgentLensClientOptions) {
+  constructor(options: TracelyxClientOptions) {
     this.apiKey = options.apiKey;
     this.projectId = options.projectId;
     this.endpoint = options.endpoint ?? DEFAULT_ENDPOINT;

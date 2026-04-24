@@ -1,7 +1,7 @@
-export { AgentLensClient } from './client.js';
+export { TracelyxClient } from './client.js';
 export { Trace, Span } from './tracer.js';
 export type {
-  AgentLensClientOptions,
+  TracelyxClientOptions,
   StartTraceOptions,
   TraceSpanOptions,
   SpanPayload,

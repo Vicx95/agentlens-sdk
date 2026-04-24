@@ -1,5 +1,5 @@
 {
-  "name": "agentlens-sdk",
+  "name": "tracelyx-sdk",
   "private": true,
   "scripts": {
     "build": "turbo run build",

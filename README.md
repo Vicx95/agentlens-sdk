@@ -1,24 +1,24 @@
-# AgentLens SDK
+# Tracelyx SDK
 
-Monorepo for the AgentLens AI observability SDK.
+Monorepo for the Tracelyx AI observability SDK.
 
 ## Packages
 
 | Package | Description |
 |---------|-------------|
-| [`@agentlens/core`](./packages/core) | Core tracing client — zero dependencies |
+| [`@tracelyx/core`](./packages/core) | Core tracing client — zero dependencies |
 
 ## Quick Start
 
 ```bash
-npm install @agentlens/core
+npm install @tracelyx/core
 ```
 
 ```typescript
-import { AgentLensClient } from '@agentlens/core';
+import { TracelyxClient } from '@tracelyx/core';
 
-const client = new AgentLensClient({
-  apiKey: 'al_...',
+const client = new TracelyxClient({
+  apiKey: 'tlx_...',
   projectId: 'my-project',
 });
 

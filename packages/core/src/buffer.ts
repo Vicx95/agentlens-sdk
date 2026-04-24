@@ -63,7 +63,7 @@ export class SpanBuffer {
     try {
       await this.sender(batch);
     } catch {
-      // silent drop — caller (AgentLensClient) handles retries at the HTTP layer
+      // silent drop — caller (TracelyxClient) handles retries at the HTTP layer
     }
   }
 }

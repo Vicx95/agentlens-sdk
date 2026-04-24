@@ -1,7 +1,7 @@
 {
-  "name": "@agentlens/core",
+  "name": "@tracelyx/core",
   "version": "0.1.0",
-  "description": "Core tracing library for AgentLens AI observability",
+  "description": "Core tracing library for Tracelyx AI observability",
   "license": "MIT",
   "type": "module",
   "main": "./dist/index.cjs",

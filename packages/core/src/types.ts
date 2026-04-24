@@ -31,7 +31,7 @@ export interface TracePayload {
   spans: SpanPayload[];
 }
 
-export interface AgentLensClientOptions {
+export interface TracelyxClientOptions {
   apiKey: string;
   projectId: string;
   endpoint?: string;
