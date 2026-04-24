@@ -5,3 +5,10 @@ dist/
 .env
 .env.local
 coverage/
+.DS_Store
+*.log
+npm-debug.log*
+pnpm-debug.log*
+.idea/
+.vscode/settings.json
+.env*.local
