@@ -6,53 +6,64 @@ const DEFAULT_FLUSH_INTERVAL_MS = 5_000;
 export class SpanBuffer {
   private readonly pending: SpanPayload[] = [];
   private timer: ReturnType<typeof setTimeout> | null = null;
-  private readonly flushIntervalMs: number;
   private stopped = false;
+  // serializes concurrent drain() calls — prevents race condition on splice()
+  private drainingPromise: Promise<void> | null = null;
 
   constructor(
     private readonly sender: (spans: SpanPayload[]) => Promise<void>,
-    flushIntervalMs = DEFAULT_FLUSH_INTERVAL_MS,
-  ) {
-    this.flushIntervalMs = flushIntervalMs;
-  }
-
-  /** Ensure the interval timer is running. Called whenever spans are added. */
-  private ensureTimer(): void {
-    if (this.stopped || this.timer !== null) return;
-    this.timer = setTimeout(() => {
-      this.timer = null;
-      void this.drain().then(() => {
-        // reschedule only if there are still spans pending
-        if (this.pending.length > 0) this.ensureTimer();
-      });
-    }, this.flushIntervalMs);
-    // unref so the timer does not keep the Node.js process alive
-    const t = this.timer as { unref?: () => void } | null;
-    if (t && typeof t.unref === 'function') {
-      t.unref();
-    }
-  }
+    private readonly flushIntervalMs = DEFAULT_FLUSH_INTERVAL_MS,
+  ) {}
 
   add(span: SpanPayload): void {
+    if (this.stopped) return;
     this.pending.push(span);
     if (this.pending.length >= MAX_BUFFER_SIZE) {
       void this.drain();
     } else {
-      this.ensureTimer();
+      this.scheduleFlush();
     }
   }
 
-  async drain(): Promise<void> {
-    if (this.pending.length === 0) return;
-    const batch = this.pending.splice(0, MAX_BUFFER_SIZE);
-    await this.sender(batch);
+  drain(): Promise<void> {
+    if (this.drainingPromise) return this.drainingPromise;
+    if (this.pending.length === 0) return Promise.resolve();
+
+    this.drainingPromise = this.runDrain().finally(() => {
+      this.drainingPromise = null;
+    });
+    return this.drainingPromise;
   }
 
+  // call drain() before stop() to flush any remaining spans
   stop(): void {
     this.stopped = true;
     if (this.timer !== null) {
       clearTimeout(this.timer);
       this.timer = null;
+    }
+  }
+
+  private scheduleFlush(): void {
+    if (this.timer !== null || this.stopped) return;
+    this.timer = setTimeout(() => {
+      this.timer = null;
+      void this.drain().then(() => {
+        if (this.pending.length > 0) this.scheduleFlush();
+      });
+    }, this.flushIntervalMs);
+    if (this.timer && typeof (this.timer as unknown as { unref?: () => void }).unref === 'function') {
+      (this.timer as unknown as { unref: () => void }).unref();
+    }
+  }
+
+  private async runDrain(): Promise<void> {
+    if (this.pending.length === 0) return;
+    const batch = this.pending.splice(0, MAX_BUFFER_SIZE);
+    try {
+      await this.sender(batch);
+    } catch {
+      // silent drop — caller (AgentLensClient) handles retries at the HTTP layer
     }
   }
 }
