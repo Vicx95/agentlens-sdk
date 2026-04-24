@@ -1,1 +1,9 @@
-// public exports — populated in Task 7
+export type {
+  SpanKind,
+  SpanStatus,
+  SpanPayload,
+  TracePayload,
+  AgentLensClientOptions,
+  StartTraceOptions,
+  TraceSpanOptions,
+} from './types.js';
