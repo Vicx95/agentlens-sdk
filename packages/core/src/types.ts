@@ -21,11 +21,13 @@ export interface SpanPayload {
   durationMs: number;
   status: SpanStatus;
   attributes: Record<string, unknown>;
+  tenantId?: string;
 }
 
 export interface TracePayload {
   projectId: string;
   tenantId?: string;
+  environment?: 'development' | 'staging' | 'production';
   spans: SpanPayload[];
 }
 

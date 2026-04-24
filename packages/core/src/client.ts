@@ -19,6 +19,7 @@ export class AgentLensClient {
   private readonly apiKey: string;
   private readonly projectId: string;
   private readonly endpoint: string;
+  private readonly environment: 'development' | 'staging' | 'production' | undefined;
   private readonly disabled: boolean;
   private readonly buffer: SpanBuffer | null;
 
@@ -26,6 +27,7 @@ export class AgentLensClient {
     this.apiKey = options.apiKey;
     this.projectId = options.projectId;
     this.endpoint = options.endpoint ?? DEFAULT_ENDPOINT;
+    this.environment = options.environment;
     this.disabled = options.disabled ?? false;
     this.buffer = this.disabled
       ? null
@@ -33,10 +35,15 @@ export class AgentLensClient {
   }
 
   startTrace(options: StartTraceOptions): Trace {
-    if (this.disabled) return new Trace(null, options.tenantId);
-    return new Trace((span) => this.buffer!.add(span), options.tenantId);
+    if (this.disabled) return new Trace(null, options.tenantId, options.name);
+    return new Trace((span) => this.buffer!.add(span), options.tenantId, options.name);
   }
 
+  /**
+   * Flushes all pending spans and permanently stops the client.
+   * Any spans added after this call are silently dropped.
+   * Intended for process shutdown — call once at exit.
+   */
   async flush(): Promise<void> {
     if (!this.buffer) return;
     this.buffer.stop();
@@ -48,7 +55,12 @@ export class AgentLensClient {
   }
 
   private async send(spans: SpanPayload[], attempt = 1): Promise<void> {
-    const payload: TracePayload = { projectId: this.projectId, spans };
+    const payload: TracePayload = {
+      projectId: this.projectId,
+      tenantId: spans[0]?.tenantId,
+      environment: this.environment,
+      spans,
+    };
     try {
       const res = await fetch(`${this.endpoint}/v1/traces`, {
         method: 'POST',
@@ -58,9 +70,13 @@ export class AgentLensClient {
         },
         body: JSON.stringify(payload),
       });
-      if (!res.ok && attempt < MAX_RETRIES) {
-        await sleep(1000 * 2 ** (attempt - 1));
-        return this.send(spans, attempt + 1);
+      if (!res.ok) {
+        const retryable = res.status >= 500 || res.status === 429;
+        if (retryable && attempt < MAX_RETRIES) {
+          await sleep(1000 * 2 ** (attempt - 1));
+          return this.send(spans, attempt + 1);
+        }
+        // non-retryable (4xx except 429) or max retries reached — silent drop
       }
     } catch {
       if (attempt < MAX_RETRIES) {

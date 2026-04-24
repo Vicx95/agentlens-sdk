@@ -13,6 +13,7 @@ export class Span {
   private status: 'ok' | 'error' = 'ok';
   private readonly attrs: Record<string, unknown> = {};
   private readonly startTime = Date.now();
+  private ended = false;
 
   constructor(
     readonly name: string,
@@ -33,6 +34,8 @@ export class Span {
   }
 
   end(attributes?: Record<string, unknown>): void {
+    if (this.ended) return;
+    this.ended = true;
     if (attributes) Object.assign(this.attrs, attributes);
     const endTime = Date.now();
     this.onEnd({
@@ -58,19 +61,26 @@ const NOOP_SPAN = {
 
 export class Trace {
   readonly id: string;
+  // name is stored for future per-trace ingestion (v1 batched API does not transmit it)
+  readonly name: string;
 
   constructor(
     private readonly onSpan: ((payload: SpanPayload) => void) | null,
     readonly tenantId?: string,
+    name = '',
   ) {
     this.id = onSpan ? randomUUID() : '';
+    this.name = name;
   }
 
   startSpan(name: string, kind: SpanKind = 'custom'): Span {
     if (!this.onSpan) return NOOP_SPAN;
     const context = storage.getStore();
     const parentSpanId = context?.spanId ?? null;
-    return new Span(name, kind, this.id, parentSpanId, this.onSpan);
+    const { tenantId } = this;
+    return new Span(name, kind, this.id, parentSpanId, (payload) =>
+      this.onSpan!({ ...payload, tenantId }),
+    );
   }
 
   async trace<T>(
