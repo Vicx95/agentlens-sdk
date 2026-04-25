@@ -184,10 +184,10 @@ export async function runValidateCommand(args: string[]): Promise<void> {
   clearTimeout(timer);
 
   if (response.status === 401) {
-    out({ ok: false, error: 'ERROR: API key is invalid or expired.' });
+    out({ ok: false, error: 'ERROR: API key is invalid or expired. Get a new key at https://app.tracelyx.dev' });
     process.exit(1);
   } else if (response.ok) {
-    out({ ok: true, message: `✓ Tracelyx configured correctly. Test trace ID: ${testTraceId}` });
+    out({ ok: true, message: `✓ Tracelyx configured correctly. Test trace ID: ${testTraceId}. View it at https://app.tracelyx.dev/traces/${testTraceId}` });
     process.exit(0);
   } else {
     out({ ok: false, error: `ERROR: Server returned ${response.status}.` });

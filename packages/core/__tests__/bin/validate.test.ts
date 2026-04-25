@@ -292,4 +292,48 @@ describe('validate command', () => {
     const payload = JSON.parse(callArgs[1].body);
     expect(payload.projectId).toBe('proj_from_env');
   });
+
+  it('success message includes app URL', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(new Response('{"accepted":1}', { status: 200 })),
+    );
+    const stdoutLines: string[] = [];
+    vi.spyOn(process.stdout, 'write').mockImplementation((chunk) => {
+      stdoutLines.push(String(chunk));
+      return true;
+    });
+    vi.spyOn(process, 'exit').mockImplementation(((code?: number) => {
+      throw new Error(`exit(${code})`);
+    }) as (code?: number) => never);
+
+    try {
+      await runValidateCommand(['--api-key', 'tl_test', '--project-id', 'proj_1']);
+    } catch { /* expected */ }
+
+    const output = stdoutLines.join('');
+    expect(output).toContain('https://app.tracelyx.dev/traces/');
+  });
+
+  it('401 error message includes new-key URL', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(new Response('', { status: 401 })),
+    );
+    const stdoutLines: string[] = [];
+    vi.spyOn(process.stdout, 'write').mockImplementation((chunk) => {
+      stdoutLines.push(String(chunk));
+      return true;
+    });
+    vi.spyOn(process, 'exit').mockImplementation(((code?: number) => {
+      throw new Error(`exit(${code})`);
+    }) as (code?: number) => never);
+
+    try {
+      await runValidateCommand(['--api-key', 'tl_invalid', '--project-id', 'proj_1']);
+    } catch { /* expected */ }
+
+    const output = stdoutLines.join('');
+    expect(output).toContain('https://app.tracelyx.dev');
+  });
 });
