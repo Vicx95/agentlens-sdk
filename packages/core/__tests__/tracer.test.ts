@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { Span, Trace } from '../src/tracer.js';
+import { Trace, Span, getActiveContext } from '../src/tracer.js';
 import type { SpanPayload } from '../src/types.js';
 
 describe('Span', () => {
@@ -96,5 +96,24 @@ describe('Trace', () => {
     const span = trace.startSpan('step', 'custom');
 
     expect(() => span.end()).not.toThrow();
+  });
+
+  it('getActiveContext returns undefined outside of trace()', () => {
+    expect(getActiveContext()).toBeUndefined();
+  });
+
+  it('getActiveContext returns spanId and traceId inside trace()', async () => {
+    let captured: { spanId: string; traceId: string } | undefined;
+    const trace = new Trace((_p) => {});
+
+    await trace.trace('step', async () => {
+      captured = getActiveContext();
+    });
+
+    expect(captured).toBeDefined();
+    expect(captured!.traceId).toBe(trace.id);
+    expect(captured!.spanId).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+    );
   });
 });

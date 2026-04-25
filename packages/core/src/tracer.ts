@@ -4,9 +4,14 @@ import type { SpanKind, SpanPayload, TraceSpanOptions } from './types.js';
 
 interface SpanContext {
   spanId: string;
+  traceId: string;
 }
 
 const storage = new AsyncLocalStorage<SpanContext>();
+
+export function getActiveContext(): { spanId: string; traceId: string } | undefined {
+  return storage.getStore();
+}
 
 export class Span {
   readonly id = randomUUID();
@@ -98,7 +103,7 @@ export class Trace {
     }
 
     try {
-      const result = await storage.run({ spanId: span.id }, fn);
+      const result = await storage.run({ spanId: span.id, traceId: this.id }, fn);
       span.end();
       return result;
     } catch (error) {

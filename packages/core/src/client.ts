@@ -39,6 +39,11 @@ export class TracelyxClient {
     return new Trace((span) => this.buffer!.add(span), options.tenantId, options.name);
   }
 
+  public recordSpan(span: SpanPayload): void {
+    if (this.disabled || !this.buffer) return;
+    this.buffer.add(span);
+  }
+
   /**
    * Flushes all pending spans and permanently stops the client.
    * Any spans added after this call are silently dropped.

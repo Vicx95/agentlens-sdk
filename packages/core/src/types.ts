@@ -16,12 +16,19 @@ export interface SpanPayload {
   parentSpanId: string | null;
   name: string;
   kind: SpanKind;
-  startTime: number;   // Unix timestamp ms
-  endTime: number;     // Unix timestamp ms
+  startTime: number;    // Unix timestamp ms
+  endTime: number;      // Unix timestamp ms
   durationMs: number;
   status: SpanStatus;
   attributes: Record<string, unknown>;
   tenantId?: string;
+  // LLM-specific — filled by integrations (e.g. instrumentAnthropic)
+  inputPayload?: string;
+  outputPayload?: string;
+  llmModel?: string;
+  promptTokens?: number;
+  completionTokens?: number;
+  costUsd?: number;
 }
 
 export interface TracePayload {

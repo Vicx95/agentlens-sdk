@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { TracelyxClient } from '../src/client.js';
+import type { SpanPayload, TracePayload } from '../src/types.js';
 
 describe('TracelyxClient', () => {
   beforeEach(() => {
@@ -93,5 +94,53 @@ describe('TracelyxClient', () => {
 
     const [url] = (fetch as ReturnType<typeof vi.fn>).mock.calls[0] as [string];
     expect(url).toBe('https://ingest.tracelyx.dev/v1/traces');
+  });
+});
+
+describe('recordSpan', () => {
+  it('adds span directly to buffer and sends on flush', async () => {
+    const sentBodies: TracePayload[] = [];
+    vi.stubGlobal('fetch', async (_url: string, init: RequestInit) => {
+      sentBodies.push(JSON.parse(init.body as string) as TracePayload);
+      return new Response('{"accepted":1}', { status: 200 });
+    });
+
+    const client = new TracelyxClient({ apiKey: 'tl_test', projectId: 'proj_1' });
+    const span: SpanPayload = {
+      id: 'span-direct',
+      traceId: 'trace-direct',
+      parentSpanId: null,
+      name: 'direct-span',
+      kind: 'custom',
+      startTime: 1000,
+      endTime: 1100,
+      durationMs: 100,
+      status: 'ok',
+      attributes: {},
+    };
+
+    client.recordSpan(span);
+    await client.flush();
+
+    expect(sentBodies).toHaveLength(1);
+    expect(sentBodies[0].spans[0].id).toBe('span-direct');
+  });
+
+  it('is no-op when disabled', () => {
+    const client = new TracelyxClient({ apiKey: 'tl_test', projectId: 'proj_1', disabled: true });
+    expect(() =>
+      client.recordSpan({
+        id: 'x',
+        traceId: 'y',
+        parentSpanId: null,
+        name: 'n',
+        kind: 'custom',
+        startTime: 0,
+        endTime: 0,
+        durationMs: 0,
+        status: 'ok',
+        attributes: {},
+      }),
+    ).not.toThrow();
   });
 });
