@@ -116,4 +116,26 @@ describe('Trace', () => {
       /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
     );
   });
+
+  it('propagates parent span context through Promise.all branches', async () => {
+    const spans: SpanPayload[] = [];
+    const trace = new Trace((p) => spans.push(p));
+
+    await trace.trace('parent', async () => {
+      await Promise.all([
+        trace.trace('branch-a', async () => {}),
+        trace.trace('branch-b', async () => {}),
+      ]);
+    });
+
+    const parent = spans.find((s) => s.name === 'parent')!;
+    const branchA = spans.find((s) => s.name === 'branch-a')!;
+    const branchB = spans.find((s) => s.name === 'branch-b')!;
+
+    expect(parent).toBeDefined();
+    expect(branchA.parentSpanId).toBe(parent.id);
+    expect(branchB.parentSpanId).toBe(parent.id);
+    expect(branchA.traceId).toBe(trace.id);
+    expect(branchB.traceId).toBe(trace.id);
+  });
 });
