@@ -66,6 +66,100 @@ describe('instrumentLangGraph', () => {
     expect(body.spans).toHaveLength(1);
   });
 
+  it('creates per-node spans for each update when stream() is called', async () => {
+    async function* fakeStream() {
+      yield { researcher: { results: ['a', 'b'] } };
+      yield { writer: { content: 'hello world' } };
+    }
+
+    const graph = {
+      invoke: vi.fn().mockResolvedValue({ writer: { content: 'hello world' } }),
+      stream: vi.fn().mockReturnValue(fakeStream()),
+    };
+
+    instrumentLangGraph(graph, client);
+
+    const chunks: unknown[] = [];
+    for await (const chunk of (graph as any).stream({ input: 'query' }, { streamMode: 'updates' })) {
+      chunks.push(chunk);
+    }
+
+    await client.flush();
+
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body) as TracePayload;
+    const nodeSpans = body.spans.filter((s) => s.name.startsWith('langgraph.node.'));
+
+    expect(nodeSpans).toHaveLength(2);
+    expect(nodeSpans.find((s) => s.name === 'langgraph.node.researcher')).toBeDefined();
+    expect(nodeSpans.find((s) => s.name === 'langgraph.node.writer')).toBeDefined();
+    nodeSpans.forEach((s) => {
+      expect(s.kind).toBe('agent_step');
+      expect(s.durationMs).toBeGreaterThanOrEqual(0);
+    });
+  });
+
+  it('node spans are children of invoke span when stream is called via invoke', async () => {
+    let streamCalled = false;
+    async function* fakeStream() {
+      streamCalled = true;
+      yield { nodeA: { x: 1 } };
+    }
+
+    const graph = {
+      invoke: vi.fn().mockImplementation(async function (this: unknown, input: unknown, config: unknown) {
+        for await (const _chunk of (this as any).stream(input, config)) { /* consume */ }
+        return { nodeA: { x: 1 } };
+      }),
+      stream: vi.fn().mockReturnValue(fakeStream()),
+    };
+
+    instrumentLangGraph(graph, client);
+
+    await graph.invoke({ input: 'hello' }, { configurable: { thread_id: 't1' } });
+
+    await client.flush();
+
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body) as TracePayload;
+    const invokeSpan = body.spans.find((s) => s.name === 'langgraph.invoke')!;
+    const nodeSpan = body.spans.find((s) => s.name === 'langgraph.node.nodeA')!;
+
+    expect(streamCalled).toBe(true);
+    expect(nodeSpan).toBeDefined();
+    expect(nodeSpan.parentSpanId).toBe(invokeSpan.id);
+    expect(nodeSpan.traceId).toBe(invokeSpan.traceId);
+  });
+
+  it('emits console.warn when streamEvents is absent', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const graph = {
+      invoke: vi.fn().mockResolvedValue({}),
+      stream: vi.fn(),
+    };
+
+    instrumentLangGraph(graph, client);
+
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('streamEvents'));
+
+    warnSpy.mockRestore();
+  });
+
+  it('does NOT warn when streamEvents is present', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const graph = {
+      invoke: vi.fn().mockResolvedValue({}),
+      stream: vi.fn(),
+      streamEvents: vi.fn(),
+    };
+
+    instrumentLangGraph(graph, client);
+
+    expect(warnSpy).not.toHaveBeenCalled();
+
+    warnSpy.mockRestore();
+  });
+
   it('links to parent trace when called inside trace.trace()', async () => {
     const graph = makeGraphMock({});
     instrumentLangGraph(graph, client);

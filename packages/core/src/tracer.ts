@@ -13,6 +13,13 @@ export function getActiveContext(): { spanId: string; traceId: string } | undefi
   return storage.getStore();
 }
 
+export function runWithContext<T>(
+  ctx: { spanId: string; traceId: string },
+  fn: () => T,
+): T {
+  return storage.run(ctx, fn);
+}
+
 export class Span {
   readonly id = randomUUID();
   private status: 'ok' | 'error' = 'ok';
