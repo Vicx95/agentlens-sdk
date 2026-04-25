@@ -29,6 +29,7 @@ export interface SpanPayload {
   promptTokens?: number;
   completionTokens?: number;
   costUsd?: number;
+  stateSnapshot?: string;
 }
 
 export interface TracePayload {
@@ -54,4 +55,5 @@ export interface StartTraceOptions {
 export interface TraceSpanOptions {
   kind?: SpanKind;
   attributes?: Record<string, unknown>;
+  stateSnapshot?: string;
 }

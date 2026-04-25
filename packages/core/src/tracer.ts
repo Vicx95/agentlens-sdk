@@ -45,7 +45,7 @@ export class Span {
     this.attrs['error.stack'] = error.stack ?? '';
   }
 
-  end(attributes?: Record<string, unknown>): void {
+  end(attributes?: Record<string, unknown>, options?: { stateSnapshot?: string }): void {
     if (this.ended) return;
     this.ended = true;
     if (attributes) Object.assign(this.attrs, attributes);
@@ -61,6 +61,7 @@ export class Span {
       durationMs: endTime - this.startTime,
       status: this.status,
       attributes: { ...this.attrs },
+      stateSnapshot: options?.stateSnapshot,
     });
   }
 }
@@ -68,7 +69,7 @@ export class Span {
 const NOOP_SPAN = {
   setAttribute: (_key: string, _value: unknown) => {},
   recordError: (_error: Error) => {},
-  end: (_attributes?: Record<string, unknown>) => {},
+  end: (_attributes?: Record<string, unknown>, _options?: { stateSnapshot?: string }) => {},
 } as unknown as Span;
 
 export class Trace {
@@ -109,13 +110,14 @@ export class Trace {
       }
     }
 
+    const endOptions = options.stateSnapshot ? { stateSnapshot: options.stateSnapshot } : undefined;
     try {
       const result = await storage.run({ spanId: span.id, traceId: this.id }, fn);
-      span.end();
+      span.end(undefined, endOptions);
       return result;
     } catch (error) {
       if (error instanceof Error) span.recordError(error);
-      span.end();
+      span.end(undefined, endOptions);
       throw error;
     }
   }
