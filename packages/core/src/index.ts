@@ -9,3 +9,4 @@ export type {
   SpanKind,
   SpanStatus,
 } from './types.js';
+export { instrumentAnthropic } from './integrations/anthropic.js';
