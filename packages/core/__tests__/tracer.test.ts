@@ -138,4 +138,32 @@ describe('Trace', () => {
     expect(branchA.traceId).toBe(trace.id);
     expect(branchB.traceId).toBe(trace.id);
   });
+
+  describe('stateSnapshot', () => {
+    it('span.end() with stateSnapshot includes it in SpanPayload', () => {
+      const spans: SpanPayload[] = [];
+      const trace = new Trace((p) => spans.push(p));
+      const span = trace.startSpan('step', 'agent_step');
+      span.end(undefined, { stateSnapshot: '{"key":"value"}' });
+
+      expect(spans[0].stateSnapshot).toBe('{"key":"value"}');
+    });
+
+    it('trace.trace() propagates stateSnapshot from options to SpanPayload', async () => {
+      const spans: SpanPayload[] = [];
+      const trace = new Trace((p) => spans.push(p));
+      await trace.trace('step', async () => {}, { stateSnapshot: '{"node":"a"}' });
+
+      expect(spans[0].stateSnapshot).toBe('{"node":"a"}');
+    });
+
+    it('span.end() without stateSnapshot leaves field undefined', () => {
+      const spans: SpanPayload[] = [];
+      const trace = new Trace((p) => spans.push(p));
+      const span = trace.startSpan('step', 'agent_step');
+      span.end();
+
+      expect(spans[0].stateSnapshot).toBeUndefined();
+    });
+  });
 });
