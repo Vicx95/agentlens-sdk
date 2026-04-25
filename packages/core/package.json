@@ -19,6 +19,9 @@
       }
     }
   },
+  "bin": {
+    "tracelyx": "./dist/bin/tracelyx.js"
+  },
   "files": [
     "dist"
   ],
