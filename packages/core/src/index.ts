@@ -11,3 +11,4 @@ export type {
 } from './types.js';
 export { instrumentAnthropic } from './integrations/anthropic.js';
 export { instrumentLangGraph } from './integrations/langgraph.js';
+export { instrumentOpenAIAgents } from './integrations/openai-agents.js';
