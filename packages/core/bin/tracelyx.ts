@@ -18,6 +18,8 @@ function buildHookSpan(
   const sessionId =
     typeof hookData['session_id'] === 'string' ? hookData['session_id'] : randomUUID();
   const now = Date.now();
+  const executionMs =
+    typeof hookData['execution_ms'] === 'number' ? hookData['execution_ms'] : 0;
 
   return {
     id: randomUUID(),
@@ -25,9 +27,9 @@ function buildHookSpan(
     parentSpanId: null,
     name: `hook.${hookName}`,
     kind: 'hook',
-    startTime: now,
+    startTime: now - executionMs,
     endTime: now,
-    durationMs: 0,
+    durationMs: executionMs,
     status: 'ok',
     attributes: {
       'hook.name': hookName,
@@ -38,6 +40,15 @@ function buildHookSpan(
       }),
       ...(hookData['tool_response'] !== undefined && {
         'hook.tool_response': JSON.stringify(hookData['tool_response']),
+      }),
+      ...(typeof hookData['execution_ms'] === 'number' && {
+        'hook.execution_ms': hookData['execution_ms'],
+      }),
+      ...(typeof hookData['tool_error'] === 'string' && {
+        'hook.error': hookData['tool_error'],
+      }),
+      ...(hookData['modified_input'] !== undefined && {
+        'hook.modified_input': JSON.stringify(hookData['modified_input']),
       }),
     },
   };

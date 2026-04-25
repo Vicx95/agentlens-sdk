@@ -70,4 +70,56 @@ describe('hook command', () => {
       /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
     );
   });
+
+  it('sets durationMs from execution_ms when present in hookData', async () => {
+    vi.stubEnv('TRACELYX_API_KEY', 'tl_test');
+    vi.stubEnv('TRACELYX_PROJECT_ID', 'proj_1');
+
+    const stdin = JSON.stringify({
+      session_id: 'sess-1',
+      tool_name: 'Read',
+      execution_ms: 42,
+    });
+
+    await runHookCommand(['--event', 'PostToolUse'], stdin);
+
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body) as TracePayload;
+    expect(body.spans[0].durationMs).toBe(42);
+    expect(body.spans[0].attributes['hook.execution_ms']).toBe(42);
+  });
+
+  it('sets hook.error from tool_error when present', async () => {
+    vi.stubEnv('TRACELYX_API_KEY', 'tl_test');
+    vi.stubEnv('TRACELYX_PROJECT_ID', 'proj_1');
+
+    const stdin = JSON.stringify({
+      session_id: 'sess-1',
+      tool_name: 'Bash',
+      tool_error: 'permission denied',
+    });
+
+    await runHookCommand(['--event', 'PostToolUse'], stdin);
+
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body) as TracePayload;
+    expect(body.spans[0].attributes['hook.error']).toBe('permission denied');
+  });
+
+  it('sets hook.modified_input when modified_input is present', async () => {
+    vi.stubEnv('TRACELYX_API_KEY', 'tl_test');
+    vi.stubEnv('TRACELYX_PROJECT_ID', 'proj_1');
+
+    const stdin = JSON.stringify({
+      session_id: 'sess-1',
+      tool_name: 'Write',
+      tool_input: { path: '/tmp/file.txt', content: 'original' },
+      modified_input: { path: '/tmp/file.txt', content: 'sanitized' },
+    });
+
+    await runHookCommand(['--event', 'PreToolUse'], stdin);
+
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body) as TracePayload;
+    expect(body.spans[0].attributes['hook.modified_input']).toBe(
+      JSON.stringify({ path: '/tmp/file.txt', content: 'sanitized' }),
+    );
+  });
 });
