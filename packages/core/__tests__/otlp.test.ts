@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { uuidToTraceId, uuidToSpanId, msToNano } from '../src/otlp.js';
+import { uuidToTraceId, uuidToSpanId, msToNano, mapAttributeValue } from '../src/otlp.js';
 
 describe('uuidToTraceId', () => {
   it('strips dashes to produce a 32-char hex string', () => {
@@ -38,5 +38,32 @@ describe('msToNano', () => {
 
   it('rounds float milliseconds without precision loss', () => {
     expect(msToNano(1000.5)).toBe('1001000000');
+  });
+});
+
+describe('mapAttributeValue', () => {
+  it('maps string to stringValue', () => {
+    expect(mapAttributeValue('hello')).toEqual({ stringValue: 'hello' });
+  });
+
+  it('maps integer number to intValue string', () => {
+    expect(mapAttributeValue(42)).toEqual({ intValue: '42' });
+  });
+
+  it('maps float number to doubleValue', () => {
+    expect(mapAttributeValue(3.14)).toEqual({ doubleValue: 3.14 });
+  });
+
+  it('maps boolean to boolValue', () => {
+    expect(mapAttributeValue(true)).toEqual({ boolValue: true });
+    expect(mapAttributeValue(false)).toEqual({ boolValue: false });
+  });
+
+  it('maps object to stringValue via JSON.stringify', () => {
+    expect(mapAttributeValue({ a: 1 })).toEqual({ stringValue: '{"a":1}' });
+  });
+
+  it('maps null to stringValue "null"', () => {
+    expect(mapAttributeValue(null)).toEqual({ stringValue: 'null' });
   });
 });
