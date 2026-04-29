@@ -12,3 +12,4 @@ export type {
 export { instrumentAnthropic } from './integrations/anthropic.js';
 export { instrumentLangGraph } from './integrations/langgraph.js';
 export { instrumentOpenAIAgents } from './integrations/openai-agents.js';
+export { OtlpExporter, type OtlpOptions } from './otlp.js';

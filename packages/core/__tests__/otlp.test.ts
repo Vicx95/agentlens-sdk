@@ -172,3 +172,12 @@ describe('mapSpansToOtlp', () => {
     expect(keys).not.toContain('tracelyx.state_snapshot');
   });
 });
+
+import { OtlpExporter as OtlpExporterFromIndex } from '../src/index.js';
+
+describe('public index re-exports', () => {
+  it('OtlpExporter is exported from the package index', () => {
+    expect(OtlpExporterFromIndex).toBeDefined();
+    expect(typeof OtlpExporterFromIndex).toBe('function');
+  });
+});
