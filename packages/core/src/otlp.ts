@@ -87,3 +87,37 @@ function buildAttributes(span: SpanPayload): { key: string; value: OtlpAnyValue 
 
   return out;
 }
+
+export interface OtlpOptions {
+  /** Base URL of the OTLP HTTP collector, e.g. 'http://localhost:4318' */
+  endpoint: string;
+  /** Extra HTTP headers forwarded with every request (e.g. auth tokens) */
+  headers?: Record<string, string>;
+  /** Value of the service.name resource attribute. Defaults to 'tracelyx'. */
+  serviceName?: string;
+}
+
+export class OtlpExporter {
+  private readonly endpoint: string;
+  private readonly headers: Record<string, string>;
+  private readonly serviceName: string;
+
+  constructor(options: OtlpOptions) {
+    this.endpoint = options.endpoint.replace(/\/$/, '');
+    this.headers = options.headers ?? {};
+    this.serviceName = options.serviceName ?? 'tracelyx';
+  }
+
+  async send(spans: SpanPayload[]): Promise<void> {
+    try {
+      const res = await fetch(`${this.endpoint}/v1/traces`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...this.headers },
+        body: JSON.stringify(mapSpansToOtlp(spans, this.serviceName)),
+      });
+      if (!res.ok) return;
+    } catch {
+      // silent drop — mirrors native sender behaviour
+    }
+  }
+}
