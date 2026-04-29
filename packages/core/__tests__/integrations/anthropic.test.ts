@@ -153,4 +153,68 @@ describe('instrumentAnthropic', () => {
     const llmSpan = body.spans.find((s) => s.kind === 'llm_call')!;
     expect(llmSpan.tenantId).toBe('acme-corp');
   });
+
+  it('emits agent.declared_tools attribute when tools are passed', async () => {
+    const anthropic = makeAnthropicMock(OK_RESPONSE);
+    instrumentAnthropic(anthropic, client);
+
+    await anthropic.messages.create({
+      model: 'claude-3-5-sonnet-20241022',
+      max_tokens: 100,
+      messages: [{ role: 'user', content: 'Hi' }],
+      tools: [
+        { name: 'read_file', description: 'Read a file', input_schema: { type: 'object', properties: {} } },
+        { name: 'write_file', description: 'Write a file', input_schema: { type: 'object', properties: {} } },
+      ],
+    });
+
+    await client.flush();
+
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body) as TracePayload;
+    const span = body.spans[0];
+    expect(span.attributes['agent.declared_tools']).toEqual(['read_file', 'write_file']);
+  });
+
+  it('emits llm.tool_call_name when response contains a tool_use block', async () => {
+    const toolUseResponse = {
+      content: [
+        { type: 'tool_use', id: 'tu_01', name: 'read_file', input: { path: '/etc/hosts' } },
+      ],
+      usage: { input_tokens: 20, output_tokens: 8 },
+    };
+    const anthropic = makeAnthropicMock(toolUseResponse);
+    instrumentAnthropic(anthropic, client);
+
+    await anthropic.messages.create({
+      model: 'claude-3-5-sonnet-20241022',
+      max_tokens: 100,
+      messages: [{ role: 'user', content: 'Read /etc/hosts' }],
+      tools: [{ name: 'read_file', description: 'Read a file', input_schema: { type: 'object', properties: {} } }],
+    });
+
+    await client.flush();
+
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body) as TracePayload;
+    const span = body.spans[0];
+    expect(span.attributes['llm.tool_call_name']).toBe('read_file');
+    expect(span.attributes['agent.declared_tools']).toEqual(['read_file']);
+  });
+
+  it('does not emit tool attributes when no tools are passed', async () => {
+    const anthropic = makeAnthropicMock(OK_RESPONSE);
+    instrumentAnthropic(anthropic, client);
+
+    await anthropic.messages.create({
+      model: 'claude-3-5-sonnet-20241022',
+      max_tokens: 100,
+      messages: [{ role: 'user', content: 'Hi' }],
+    });
+
+    await client.flush();
+
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body) as TracePayload;
+    const span = body.spans[0];
+    expect(span.attributes['agent.declared_tools']).toBeUndefined();
+    expect(span.attributes['llm.tool_call_name']).toBeUndefined();
+  });
 });

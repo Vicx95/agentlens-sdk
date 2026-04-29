@@ -10,12 +10,23 @@ interface MessageParam {
   content: string | unknown[];
 }
 
+interface ToolDefinition {
+  name: string;
+  [key: string]: unknown;
+}
+
+interface ContentBlock {
+  type: string;
+  [key: string]: unknown;
+}
+
 interface CreateParams {
   model: string;
   messages: MessageParam[];
   system?: string | Array<{ type?: string; text?: string }>;
   temperature?: number;
   max_tokens?: number;
+  tools?: ToolDefinition[];
   [key: string]: unknown;
 }
 
@@ -25,7 +36,7 @@ interface UsageData {
 }
 
 interface AnthropicResponse {
-  content?: unknown[];
+  content?: ContentBlock[];
   usage?: UsageData;
   [key: string]: unknown;
 }
@@ -67,6 +78,10 @@ export function instrumentAnthropic<T extends AnthropicLike>(
       'llm.system_prompt_hash': hashSystemPrompt(params.system),
     };
 
+    if (params.tools && params.tools.length > 0) {
+      attributes['agent.declared_tools'] = params.tools.map((t) => t.name);
+    }
+
     let response: AnthropicResponse | undefined;
     let status: 'ok' | 'error' = 'ok';
 
@@ -74,6 +89,15 @@ export function instrumentAnthropic<T extends AnthropicLike>(
       response = await originalCreate(params);
       attributes['llm.prompt_tokens'] = response.usage?.input_tokens;
       attributes['llm.completion_tokens'] = response.usage?.output_tokens;
+
+      const toolUseBlock = response.content?.find(
+        (block): block is ContentBlock & { name: string } =>
+          block.type === 'tool_use' && typeof block['name'] === 'string',
+      );
+      if (toolUseBlock) {
+        attributes['llm.tool_call_name'] = toolUseBlock['name'];
+      }
+
       return response;
     } catch (error) {
       status = 'error';
