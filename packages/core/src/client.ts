@@ -6,6 +6,7 @@ import type {
 } from './types.js';
 import { SpanBuffer } from './buffer.js';
 import { Trace } from './tracer.js';
+import { OtlpExporter, type OtlpOptions } from './otlp.js';
 
 const DEFAULT_ENDPOINT = 'https://ingest.tracelyx.dev';
 const MAX_RETRIES = 3;
@@ -23,15 +24,23 @@ export class TracelyxClient {
   private readonly disabled: boolean;
   private readonly buffer: SpanBuffer | null;
 
-  constructor(options: TracelyxClientOptions) {
+  constructor(options: TracelyxClientOptions & { otlp?: OtlpOptions }) {
     this.apiKey = options.apiKey;
     this.projectId = options.projectId;
     this.endpoint = options.endpoint ?? DEFAULT_ENDPOINT;
     this.environment = options.environment;
     this.disabled = options.disabled ?? false;
-    this.buffer = this.disabled
-      ? null
-      : new SpanBuffer((spans) => this.send(spans));
+    if (this.disabled) {
+      this.buffer = null;
+    } else {
+      const otlpExporter = options.otlp ? new OtlpExporter(options.otlp) : null;
+      const sender = otlpExporter
+        ? async (spans: SpanPayload[]) => {
+            await Promise.allSettled([this.sendNative(spans), otlpExporter.send(spans)]);
+          }
+        : (spans: SpanPayload[]) => this.sendNative(spans);
+      this.buffer = new SpanBuffer(sender);
+    }
   }
 
   startTrace(options: StartTraceOptions): Trace {
@@ -59,7 +68,7 @@ export class TracelyxClient {
     await Promise.race([drain, timeout]);
   }
 
-  private async send(spans: SpanPayload[], attempt = 1): Promise<void> {
+  private async sendNative(spans: SpanPayload[], attempt = 1): Promise<void> {
     const payload: TracePayload = {
       projectId: this.projectId,
       tenantId: spans[0]?.tenantId,
@@ -79,14 +88,14 @@ export class TracelyxClient {
         const retryable = res.status >= 500 || res.status === 429;
         if (retryable && attempt < MAX_RETRIES) {
           await sleep(1000 * 2 ** (attempt - 1));
-          return this.send(spans, attempt + 1);
+          return this.sendNative(spans, attempt + 1);
         }
         // non-retryable (4xx except 429) or max retries reached — silent drop
       }
     } catch {
       if (attempt < MAX_RETRIES) {
         await sleep(1000 * 2 ** (attempt - 1));
-        return this.send(spans, attempt + 1);
+        return this.sendNative(spans, attempt + 1);
       }
       // silent drop after max retries — never throw to caller
     }
