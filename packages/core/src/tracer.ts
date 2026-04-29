@@ -5,16 +5,17 @@ import type { SpanKind, SpanPayload, TraceSpanOptions } from './types.js';
 interface SpanContext {
   spanId: string;
   traceId: string;
+  tenantId?: string;
 }
 
 const storage = new AsyncLocalStorage<SpanContext>();
 
-export function getActiveContext(): { spanId: string; traceId: string } | undefined {
+export function getActiveContext(): SpanContext | undefined {
   return storage.getStore();
 }
 
 export function runWithContext<T>(
-  ctx: { spanId: string; traceId: string },
+  ctx: SpanContext,
   fn: () => T,
 ): T {
   return storage.run(ctx, fn);
@@ -112,7 +113,7 @@ export class Trace {
 
     const endOptions = options.stateSnapshot ? { stateSnapshot: options.stateSnapshot } : undefined;
     try {
-      const result = await storage.run({ spanId: span.id, traceId: this.id }, fn);
+      const result = await storage.run({ spanId: span.id, traceId: this.id, tenantId: this.tenantId }, fn);
       span.end(undefined, endOptions);
       return result;
     } catch (error) {

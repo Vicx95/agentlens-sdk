@@ -132,4 +132,25 @@ describe('instrumentAnthropic', () => {
     const body = JSON.parse(fetchMock.mock.calls[0][1].body) as TracePayload;
     expect(body.spans[0].parentSpanId).toBeNull();
   });
+
+  it('propagates tenantId from active trace context to llm_call span', async () => {
+    const anthropic = makeAnthropicMock(OK_RESPONSE);
+    instrumentAnthropic(anthropic, client);
+
+    const trace = client.startTrace({ name: 'run', tenantId: 'acme-corp' });
+
+    await trace.trace('agent-step', async () => {
+      await anthropic.messages.create({
+        model: 'claude-3-5-sonnet-20241022',
+        max_tokens: 100,
+        messages: [{ role: 'user', content: 'Hi' }],
+      });
+    });
+
+    await client.flush();
+
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body) as TracePayload;
+    const llmSpan = body.spans.find((s) => s.kind === 'llm_call')!;
+    expect(llmSpan.tenantId).toBe('acme-corp');
+  });
 });

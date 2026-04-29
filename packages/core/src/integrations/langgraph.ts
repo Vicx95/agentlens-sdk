@@ -67,6 +67,7 @@ export function instrumentLangGraph<T extends CompiledGraphLike>(
               durationMs: now - prevTime,
               status: 'ok',
               attributes: { 'langgraph.node': nodeName },
+              tenantId: getActiveContext()?.tenantId,
             };
             tracelyxClient.recordSpan(nodeSpan);
           }
@@ -116,6 +117,7 @@ export function instrumentLangGraph<T extends CompiledGraphLike>(
         durationMs: endTime - startTime,
         status,
         attributes,
+        tenantId: ctx?.tenantId,
       };
       tracelyxClient.recordSpan(span);
     }

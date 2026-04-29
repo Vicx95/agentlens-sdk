@@ -187,4 +187,46 @@ describe('instrumentOpenAIAgents', () => {
     expect(agentSpan.parentSpanId).toBe(parentSpan.id);
     expect(agentSpan.traceId).toBe(parentSpan.traceId);
   });
+
+  it('propagates tenantId from active trace context to agent_step span', async () => {
+    const agent = { name: 'BillingAgent', run: vi.fn().mockResolvedValue({}) };
+    instrumentOpenAIAgents(agent, client);
+
+    const trace = client.startTrace({ name: 'pipeline', tenantId: 'tenant-xyz' });
+
+    await trace.trace('orchestrate', async () => {
+      await agent.run('task');
+    });
+
+    await client.flush();
+
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body) as TracePayload;
+    const agentSpan = body.spans.find((s) => s.name === 'agent.BillingAgent')!;
+    expect(agentSpan.tenantId).toBe('tenant-xyz');
+  });
+
+  it('propagates tenantId to tool_call spans via runWithContext', async () => {
+    const toolFn = vi.fn().mockResolvedValue('ok');
+    const agent = {
+      name: 'ToolAgent',
+      tools: [{ name: 'do_thing', on_invoke_tool: toolFn }],
+      run: vi.fn().mockImplementation(async function (this: unknown) {
+        await (this as any).tools[0].on_invoke_tool({}, '{}');
+        return {};
+      }),
+    };
+
+    instrumentOpenAIAgents(agent, client);
+
+    const trace = client.startTrace({ name: 'run', tenantId: 'tenant-abc' });
+    await trace.trace('step', async () => {
+      await agent.run('go');
+    });
+
+    await client.flush();
+
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body) as TracePayload;
+    const toolSpan = body.spans.find((s) => s.name === 'tool.do_thing')!;
+    expect(toolSpan.tenantId).toBe('tenant-abc');
+  });
 });

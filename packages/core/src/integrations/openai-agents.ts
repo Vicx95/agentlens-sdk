@@ -63,6 +63,7 @@ function wrapTools(tools: ToolLike[], tracelyxClient: TracelyxClient, handoffTar
           durationMs: endTime - startTime,
           status,
           attributes,
+          tenantId: ctx?.tenantId,
         };
         tracelyxClient.recordSpan(toolSpan);
       }
@@ -102,7 +103,7 @@ export function instrumentOpenAIAgents<T extends AgentLike>(
     let status: 'ok' | 'error' = 'ok';
 
     try {
-      return await runWithContext({ spanId, traceId }, () => originalRun(...args));
+      return await runWithContext({ spanId, traceId, tenantId: ctx?.tenantId }, () => originalRun(...args));
     } catch (error) {
       status = 'error';
       if (error instanceof Error) {
@@ -127,6 +128,7 @@ export function instrumentOpenAIAgents<T extends AgentLike>(
         durationMs: endTime - startTime,
         status,
         attributes,
+        tenantId: ctx?.tenantId,
       };
       tracelyxClient.recordSpan(span);
     }

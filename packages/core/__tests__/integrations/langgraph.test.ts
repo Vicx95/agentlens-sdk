@@ -178,4 +178,21 @@ describe('instrumentLangGraph', () => {
     expect(lgSpan.parentSpanId).toBe(parentSpan.id);
     expect(lgSpan.traceId).toBe(parentSpan.traceId);
   });
+
+  it('propagates tenantId from active trace context to invoke span', async () => {
+    const graph = makeGraphMock({});
+    instrumentLangGraph(graph, client);
+
+    const trace = client.startTrace({ name: 'run', tenantId: 'tenant-lg' });
+
+    await trace.trace('step', async () => {
+      await graph.invoke({ input: 'x' });
+    });
+
+    await client.flush();
+
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body) as TracePayload;
+    const lgSpan = body.spans.find((s) => s.name === 'langgraph.invoke')!;
+    expect(lgSpan.tenantId).toBe('tenant-lg');
+  });
 });

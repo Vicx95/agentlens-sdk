@@ -95,6 +95,7 @@ export function instrumentAnthropic<T extends AnthropicLike>(
         durationMs: endTime - startTime,
         status,
         attributes,
+        tenantId: ctx?.tenantId,
         inputPayload: JSON.stringify(params.messages),
         outputPayload: response?.content !== undefined ? JSON.stringify(response.content) : undefined,
         llmModel: params.model,
