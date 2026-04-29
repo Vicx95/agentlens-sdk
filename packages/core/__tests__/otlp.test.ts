@@ -94,6 +94,11 @@ describe('mapSpansToOtlp', () => {
       value: { stringValue: 'my-service' },
     });
     expect(result.resourceSpans[0].scopeSpans[0].scope.name).toBe('tracelyx');
+    expect(result.resourceSpans[0].resource.attributes).toContainEqual({
+      key: 'tracelyx.sdk.version',
+      value: { stringValue: '0.1.0' },
+    });
+    expect(result.resourceSpans[0].scopeSpans[0].scope.version).toBe('0.1.0');
   });
 
   it('maps span IDs, timestamps, and status correctly', () => {
@@ -107,6 +112,7 @@ describe('mapSpansToOtlp', () => {
     expect(span.startTimeUnixNano).toBe('1000000000000');
     expect(span.endTimeUnixNano).toBe('1001000000000');
     expect(span.status).toEqual({ code: 1 });
+    expect(span.kind).toBe(1);
   });
 
   it('maps span.attributes and LLM top-level fields to OTLP attributes', () => {
@@ -146,5 +152,23 @@ describe('mapSpansToOtlp', () => {
       result.resourceSpans[0].scopeSpans[0].spans[0].attributes.map((a: any) => [a.key, a.value]),
     );
     expect(attrMap['tracelyx.state_snapshot']).toEqual({ stringValue: '{"x":1}' });
+  });
+
+  it('omits gen_ai.* attributes when LLM fields are absent', () => {
+    const plainSpan: SpanPayload = {
+      ...SAMPLE_SPAN,
+      llmModel: undefined,
+      promptTokens: undefined,
+      completionTokens: undefined,
+      stateSnapshot: undefined,
+    };
+    const result = mapSpansToOtlp([plainSpan], 'svc') as any;
+    const keys = result.resourceSpans[0].scopeSpans[0].spans[0].attributes.map(
+      (a: any) => a.key,
+    );
+    expect(keys).not.toContain('gen_ai.request.model');
+    expect(keys).not.toContain('gen_ai.usage.prompt_tokens');
+    expect(keys).not.toContain('gen_ai.usage.completion_tokens');
+    expect(keys).not.toContain('tracelyx.state_snapshot');
   });
 });
