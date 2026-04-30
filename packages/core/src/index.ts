@@ -1,5 +1,5 @@
 export { TracelyxClient } from './client.js';
-export { Trace, Span, getActiveContext, runWithContext } from './tracer.js';
+export { Trace, Span, getActiveContext, runWithContext, parseTraceparent } from './tracer.js';
 export type {
   TracelyxClientOptions,
   StartTraceOptions,

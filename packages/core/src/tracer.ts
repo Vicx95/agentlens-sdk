@@ -2,6 +2,19 @@ import { AsyncLocalStorage } from 'async_hooks';
 import { randomUUID } from 'crypto';
 import type { SpanKind, SpanPayload, TraceSpanOptions } from './types.js';
 
+export function parseTraceparent(header: string): { traceId: string; parentSpanId: string } | null {
+  const parts = header.trim().split('-');
+  if (parts.length !== 4) return null;
+  const [version, traceId, parentSpanId, flags] = parts;
+  if (version !== '00') return null;
+  if (!/^[0-9a-f]{32}$/.test(traceId)) return null;
+  if (!/^[0-9a-f]{16}$/.test(parentSpanId)) return null;
+  if (!/^[0-9a-f]{2}$/.test(flags)) return null;
+  if (traceId === '0'.repeat(32)) return null;
+  if (parentSpanId === '0'.repeat(16)) return null;
+  return { traceId, parentSpanId };
+}
+
 interface SpanContext {
   spanId: string;
   traceId: string;
@@ -77,20 +90,24 @@ export class Trace {
   readonly id: string;
   // name is stored for future per-trace ingestion (v1 batched API does not transmit it)
   readonly name: string;
+  private readonly externalParentSpanId: string | null;
 
   constructor(
     private readonly onSpan: ((payload: SpanPayload) => void) | null,
     readonly tenantId?: string,
     name = '',
+    traceparent?: string,
   ) {
-    this.id = onSpan ? randomUUID() : '';
+    const external = traceparent ? parseTraceparent(traceparent) : null;
+    this.id = onSpan ? (external?.traceId ?? randomUUID()) : '';
     this.name = name;
+    this.externalParentSpanId = external?.parentSpanId ?? null;
   }
 
   startSpan(name: string, kind: SpanKind = 'custom'): Span {
     if (!this.onSpan) return NOOP_SPAN;
     const context = storage.getStore();
-    const parentSpanId = context?.spanId ?? null;
+    const parentSpanId = context?.spanId ?? this.externalParentSpanId;
     const { tenantId } = this;
     return new Span(name, kind, this.id, parentSpanId, (payload) =>
       this.onSpan!({ ...payload, tenantId }),

@@ -50,6 +50,8 @@ export interface TracelyxClientOptions {
 export interface StartTraceOptions {
   name: string;
   tenantId?: string;
+  /** W3C traceparent header value for linking into an existing distributed trace. */
+  traceparent?: string;
 }
 
 export interface TraceSpanOptions {

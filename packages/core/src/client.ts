@@ -45,7 +45,7 @@ export class TracelyxClient {
 
   startTrace(options: StartTraceOptions): Trace {
     if (this.disabled) return new Trace(null, options.tenantId, options.name);
-    return new Trace((span) => this.buffer!.add(span), options.tenantId, options.name);
+    return new Trace((span) => this.buffer!.add(span), options.tenantId, options.name, options.traceparent);
   }
 
   public recordSpan(span: SpanPayload): void {
